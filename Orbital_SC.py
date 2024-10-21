@@ -16,7 +16,7 @@ steps = 1000
 
 # Initial position in spherical coordinates (azimuth, zenith)
 azimuth_rad = 0.0
-zenith_rad = np.pi / 2  # In the xy-plane
+zenith_rad = np.pi / 2 - np.pi/4 # In the xy-plane
 r = 5.0  # Radial distance from the star
 
 # Convert spherical coordinates to Cartesian
