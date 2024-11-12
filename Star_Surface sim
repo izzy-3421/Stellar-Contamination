@@ -112,3 +112,93 @@ plt.title("Simulated Star Surface Temperature")
 plt.xlabel("X")
 plt.ylabel("Y")
 plt.show()
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Constants
+h = 6.626e-34  # Planck's constant (J s)
+c = 3.0e8      # Speed of light (m/s)
+k = 1.38e-23   # Boltzmann constant (J/K)
+wavelength = 1080e-9  # 1080 nm in meters
+
+# Temperatures
+T_photosphere = 5770  # Temperature of the photosphere in K
+T_penumbra = 4500     # Temperature of penumbra in K
+T_umbra = 4000        # Temperature of umbra in K
+T_faculae = 5900      # Temperature of faculae in K
+
+# Limb darkening parameters for 1080 nm (approximate)
+limb_darkening_coeff = 0.5
+
+def planck_law(T, wavelength):
+    """Calculate intensity based on Planck's law for a given temperature and wavelength."""
+    return (2 * h * c**2 / wavelength**5) / (np.exp(h * c / (wavelength * k * T)) - 1)
+
+def limb_darkening(x, y, coeff=limb_darkening_coeff):
+    """Calculate limb darkening based on distance from the solar center."""
+    r = np.sqrt(x**2 + y**2)
+    return 1 - coeff * (1 - np.sqrt(1 - r**2))
+
+# Grid setup
+size = 500  # Grid size
+sun_radius = 1  # Normalized radius for the sun's disk
+x = np.linspace(-1, 1, size)
+y = np.linspace(-1, 1, size)
+X, Y = np.meshgrid(x, y)
+R = np.sqrt(X**2 + Y**2)
+
+# Generate the solar surface with limb darkening
+solar_surface = np.zeros((size, size))
+for i in range(size):
+    for j in range(size):
+        if R[i, j] <= sun_radius:  # Within the solar disk
+            intensity_photosphere = planck_law(T_photosphere, wavelength) * limb_darkening(X[i, j], Y[i, j])
+            solar_surface[i, j] = intensity_photosphere
+
+# Add sunspots with umbra and penumbra
+num_sunspots = 10  # Increase the number of sunspots for clusters
+umbra_radius = 0.02  # Relative size of the umbra
+penumbra_radius = 0.05  # Relative size of the penumbra
+
+for _ in range(num_sunspots):
+    # Random position for the sunspot within the equatorial region
+    cx, cy = np.random.uniform(-0.6, 0.6), np.random.uniform(-0.3, 0.3)
+    
+    for i in range(size):
+        for j in range(size):
+            distance = np.sqrt((X[i, j] - cx)**2 + (Y[i, j] - cy)**2)
+            
+            if distance < umbra_radius:
+                # Umbra region
+                intensity_umbra = planck_law(T_umbra, wavelength) * limb_darkening(X[i, j], Y[i, j])
+                solar_surface[i, j] = intensity_umbra
+            elif distance < penumbra_radius:
+                # Penumbra region
+                intensity_penumbra = planck_law(T_penumbra, wavelength) * limb_darkening(X[i, j], Y[i, j])
+                solar_surface[i, j] = intensity_penumbra
+
+# Add groups of faculae near the equatorial bands
+faculae_radius = 0.07  # Relative size for faculae regions
+num_faculae_groups = 15  # Number of faculae groups
+
+for _ in range(num_faculae_groups):
+    # Position faculae groups in bands around the equator
+    cx, cy = np.random.uniform(-0.8, 0.8), np.random.uniform(-0.4, 0.4)
+    
+    for i in range(size):
+        for j in range(size):
+            distance = np.sqrt((X[i, j] - cx)**2 + (Y[i, j] - cy)**2)
+            
+            if distance < faculae_radius:
+                # Faculae region
+                limb_effect = 1 + 0.3 * (1 - np.sqrt(1 - R[i, j]**2))  # Enhance brightness near limb
+                intensity_faculae = planck_law(T_faculae, wavelength) * limb_darkening(X[i, j], Y[i, j]) * limb_effect
+                solar_surface[i, j] = intensity_faculae
+
+# Plot the simulated solar surface with sunspots and faculae groups
+plt.imshow(solar_surface, cmap='hot', origin='lower', extent=[-1, 1, -1, 1])
+plt.colorbar(label="Intensity at 1080 nm")
+plt.title("Simulated Solar Surface with Sunspots and Faculae at 1080 nm")
+plt.xlabel("X (solar radii)")
+plt.ylabel("Y (solar radii)")
+plt.show()
