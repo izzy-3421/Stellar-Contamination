@@ -1,0 +1,114 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter, sobel
+
+# Constants for Planck's Law
+h = 6.626e-34  # Planck's constant (J·s)
+c = 3.0e8      # Speed of light (m/s)
+k_B = 1.381e-23  # Boltzmann constant (J/K)
+wavelength = 1080e-9  # Wavelength of helium line (1080 nm = 1.08e-6 m)
+
+# Function to compute spectral radiance using Planck's Law
+def planck_law(T, wavelength):
+    return (2 * h * c**2) / (wavelength**5) * (1 / (np.exp(h * c / (wavelength * k_B * T)) - 1))
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+# Define simulation parameters
+grid_size = 768  # Increased resolution for better detail
+num_spots = 5    # Number of sunspots
+num_faculae = 10  # Number of faculae regions
+
+# Generate granulation pattern using Perlin-like noise
+temperature = np.random.rand(grid_size, grid_size) * 5778  # Sun-like temperature in Kelvin
+
+# Smooth the background to create granulation effect
+granulation = gaussian_filter(temperature, sigma=2)
+
+# Create a copy of the temperature map to add sunspots and faculae
+temperature_map = granulation.copy()
+
+# Function to add sunspots with random radii
+def add_sunspots(temperature_map, num_spots):
+    for _ in range(num_spots):
+        # Randomly pick the center and radius for the sunspot
+        x_center, y_center = np.random.randint(0, grid_size, 2)
+        spot_radius = np.random.randint(1, 15)  # Random radius between 1 and 15 pixels
+        for i in range(grid_size):
+            for j in range(grid_size):
+                # Calculate distance from the center
+                distance = np.sqrt((i - x_center)**2 + (j - y_center)**2)
+                if distance < spot_radius:
+                    # Apply cooler temperature for sunspot
+                    temperature_map[i, j] *= 0.6  # Reduce temperature
+    return temperature_map
+
+# Add sunspots to the temperature map
+temperature_map = add_sunspots(temperature_map, num_spots)
+
+# Function to add faculae with random radii
+def add_faculae(temperature_map, num_faculae):
+    for _ in range(num_faculae):
+        # Randomly pick the center and radius for faculae
+        x_center, y_center = np.random.randint(0, grid_size, 2)
+        faculae_radius = np.random.randint(1, 15)  # Random radius between 1 and 15 pixels
+        for i in range(grid_size):
+            for j in range(grid_size):
+                # Calculate distance from the center
+                distance = np.sqrt((i - x_center)**2 + (j - y_center)**2)
+                if distance < faculae_radius:
+                    # Apply slightly higher temperature for faculae
+                    temperature_map[i, j] *= 1.1  # Increase temperature slightly
+    return temperature_map
+
+# Add faculae to the temperature map
+temperature_map = add_faculae(temperature_map, num_faculae)
+
+# Apply Planck's Law to compute the radiance at 1080 nm
+radiance_map = planck_law(temperature_map, wavelength)
+
+# Apply a Sobel filter to enhance edges and simulate magnetic field structures
+sobel_x = sobel(radiance_map, axis=0)
+sobel_y = sobel(radiance_map, axis=1)
+edge_enhanced = np.hypot(sobel_x, sobel_y)
+
+# Blend the original radiance map with the edge-enhanced version
+blended_map = radiance_map + edge_enhanced * 0.05
+
+# Normalize the radiance map for better visualization
+blended_map = (blended_map - blended_map.min()) / (blended_map.max() - blended_map.min())
+
+# Plot the final simulated solar surface
+plt.figure(figsize=(10, 10))
+plt.imshow(blended_map, cmap="inferno", origin="lower")
+plt.colorbar(label="Relative Intensity")
+plt.title("Simulated Solar Surface with Sunspots, Faculae, and Granulation (1080 nm)")
+plt.xlabel("X")
+plt.ylabel("Y")
+plt.axis("off")
+plt.show()
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter
+
+# Load MHD data (e.g., temperature, density, magnetic field) - placeholder data
+grid_size = 256
+temperature = np.random.rand(grid_size, grid_size) * 5778  # Sun-like temperature
+density = np.random.rand(grid_size, grid_size) * 1e17  # Approximate photospheric density
+magnetic_field_strength = np.random.rand(grid_size, grid_size) * 0.1  # Magnetic field in Tesla
+
+# Smooth the data to simulate the effect of turbulence/granulation
+temperature_smoothed = gaussian_filter(temperature, sigma=3)
+density_smoothed = gaussian_filter(density, sigma=3)
+magnetic_field_smoothed = gaussian_filter(magnetic_field_strength, sigma=3)
+
+# Visualize the temperature as an example
+plt.figure(figsize=(8, 8))
+plt.imshow(temperature_smoothed, cmap="plasma", origin="lower")
+plt.colorbar(label="Temperature (K)")
+plt.title("Simulated Star Surface Temperature")
+plt.xlabel("X")
+plt.ylabel("Y")
+plt.show()
