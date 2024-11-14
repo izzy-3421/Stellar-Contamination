@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.ndimage import gaussian_filter, sobel
+from scipy.ndimage import gaussian_filter
 
 # Constants for Planck's Law
 h = 6.626e-34  # Planck's constant (J·s)
@@ -8,7 +8,7 @@ c = 3.0e8      # Speed of light (m/s)
 k_B = 1.381e-23  # Boltzmann constant (J/K)
 wavelength = 1080e-9  # Wavelength of helium line (1080 nm = 1.08e-6 m)
 
-# Function to compute spectral radiance using Planck's Law
+# Function to compute spectral radiance using Planck's Law assuming LTE
 def planck_law(T, wavelength):
     return (2 * h * c**2) / (wavelength**5) * (1 / (np.exp(h * c / (wavelength * k_B * T)) - 1))
 
@@ -17,188 +17,124 @@ np.random.seed(42)
 
 # Define simulation parameters
 grid_size = 768  # Increased resolution for better detail
-num_spots = 5    # Number of sunspots
-num_faculae = 10  # Number of faculae regions
+num_spots = 15    # Number of sunspots
+num_faculae = 20  # Number of faculae regions
 
-# Generate granulation pattern using Perlin-like noise
+# Generate granulation pattern using random noise
 temperature = np.random.rand(grid_size, grid_size) * 5778  # Sun-like temperature in Kelvin
 
 # Smooth the background to create granulation effect
-granulation = gaussian_filter(temperature, sigma=2)
+granulation = gaussian_filter(temperature, sigma=1.8)
+density = np.random.rand(grid_size, grid_size) * 1e17  # Approximate photospheric density
+magnetic_field_strength = np.random.rand(grid_size, grid_size) * 0.05  # Magnetic field in Tesla
 
+## Function to generate granular structure for sunspots and faculae
+def generate_granular_structure(radius, temperature_base, variation, reduction_factor):
+    size = radius * 2
+    temp_granules = temperature_base + (np.random.rand(size, size) - 0.5) * variation
+    temp_granules = gaussian_filter(temp_granules, sigma=6)
+    temp_granules = temp_granules * reduction_factor  # Apply temperature reduction or increase
+    return temp_granules
 # Create a copy of the temperature map to add sunspots and faculae
 temperature_map = granulation.copy()
 
-# Function to add sunspots with random radii
-def add_sunspots(temperature_map, num_spots):
+# Function to generate irregular shapes using random noise and Gaussian smoothing, with a radial mask to avoid edges
+def generate_irregular_shape(radius):
+    shape = np.random.rand(2 * radius, 2 * radius)
+    shape = gaussian_filter(shape, sigma=5)
+    mask = shape > 0.505  # Threshold to create irregular shapes
+
+    # Create a circular mask to blend the edges
+    y, x = np.ogrid[-radius:radius, -radius:radius]
+    irregular_mask = x**2 + y**2 <= radius**2
+    irregular_shape = mask & irregular_mask
+
+    return irregular_shape
+
+# Function to add sunspots with irregular shapes, including penumbra and umbra
+def add_sunspots(temperature_map, magnetic_field, num_spots):
     for _ in range(num_spots):
-        # Randomly pick the center and radius for the sunspot
         x_center, y_center = np.random.randint(0, grid_size, 2)
-        spot_radius = np.random.randint(1, 15)  # Random radius between 1 and 15 pixels
-        for i in range(grid_size):
-            for j in range(grid_size):
-                # Calculate distance from the center
-                distance = np.sqrt((i - x_center)**2 + (j - y_center)**2)
-                if distance < spot_radius:
-                    # Apply cooler temperature for sunspot
-                    temperature_map[i, j] *= 0.6  # Reduce temperature
-    return temperature_map
+        spot_radius = np.random.randint(20, 50)  # Random radius between 20 and 50 pixels
 
-# Add sunspots to the temperature map
-temperature_map = add_sunspots(temperature_map, num_spots)
+        # Generate an irregular sunspot shape
+        spot_shape = generate_irregular_shape(spot_radius)
+        shape_size = spot_shape.shape[0]
 
-# Function to add faculae with random radii
-def add_faculae(temperature_map, num_faculae):
+        # Define the umbra and penumbra radii
+        penumbra_radius = spot_radius
+        umbra_radius = int(0.4 * spot_radius)  # Umbra is about 20% of the area, radius is about 40% of penumbra
+
+        # Generate umbra and penumbra shapes
+        for i in range(shape_size):
+            for j in range(shape_size):
+                if spot_shape[i, j]:
+                    x = x_center + i - shape_size // 2
+                    y = y_center + j - shape_size // 2
+                    if 0 <= x < grid_size and 0 <= y < grid_size:
+                        # Calculate distance from the center
+                        distance = np.sqrt((i - shape_size // 2)**2 + (j - shape_size // 2)**2)
+                        if distance < umbra_radius:
+                            # Apply umbra temperature reduction (darker core)
+                            temperature_map[x, y] *= 0.4  # Reduce temperature more for umbra
+                            magnetic_field[x, y] += 0.2  # Increase magnetic field strength
+                        elif distance < penumbra_radius:
+                            # Apply penumbra temperature reduction (slightly darker outer part)
+                            temperature_map[x, y] *= 0.7  # Reduce temperature for penumbra
+                            magnetic_field[x, y] += 0.1  # Increase magnetic field strength
+    return temperature_map, magnetic_field
+
+# Function to add faculae with irregular shapes
+def add_faculae(temperature_map, magnetic_field, num_faculae):
     for _ in range(num_faculae):
-        # Randomly pick the center and radius for faculae
         x_center, y_center = np.random.randint(0, grid_size, 2)
-        faculae_radius = np.random.randint(1, 15)  # Random radius between 1 and 15 pixels
-        for i in range(grid_size):
-            for j in range(grid_size):
-                # Calculate distance from the center
-                distance = np.sqrt((i - x_center)**2 + (j - y_center)**2)
-                if distance < faculae_radius:
-                    # Apply slightly higher temperature for faculae
-                    temperature_map[i, j] *= 1.1  # Increase temperature slightly
-    return temperature_map
+        faculae_radius = np.random.randint(15, 60)
 
-# Add faculae to the temperature map
-temperature_map = add_faculae(temperature_map, num_faculae)
+        # Generate an irregular faculae shape
+        faculae_shape = generate_irregular_shape(faculae_radius)
+        shape_size = faculae_shape.shape[0]
+
+        for i in range(shape_size):
+            for j in range(shape_size):
+                if faculae_shape[i, j]:
+                    x = x_center + i - shape_size // 2
+                    y = y_center + j - shape_size // 2
+                    if 0 <= x < grid_size and 0 <= y < grid_size:
+                        temperature_map[x, y] *= 1.3  # Brighten faculae
+                        magnetic_field[x, y] += 0.05
+    return temperature_map, magnetic_field
+
+# Add sunspots and faculae to the temperature map
+temperature_map, magnetic_field_smoothed = add_sunspots(temperature_map, magnetic_field_strength, num_spots)
+temperature_map, magnetic_field_smoothed = add_faculae(temperature_map, magnetic_field_smoothed, num_faculae)
 
 # Apply Planck's Law to compute the radiance at 1080 nm
 radiance_map = planck_law(temperature_map, wavelength)
 
-# Apply a Sobel filter to enhance edges and simulate magnetic field structures
-sobel_x = sobel(radiance_map, axis=0)
-sobel_y = sobel(radiance_map, axis=1)
-edge_enhanced = np.hypot(sobel_x, sobel_y)
+# Normalize the temperature map for visualization
+temperature_map_normalized = (temperature_map - temperature_map.min()) / (temperature_map.max() - temperature_map.min())
 
-# Blend the original radiance map with the edge-enhanced version
-blended_map = radiance_map + edge_enhanced * 0.05
-
-# Normalize the radiance map for better visualization
-blended_map = (blended_map - blended_map.min()) / (blended_map.max() - blended_map.min())
-
-# Plot the final simulated solar surface
+# Plot the temperature map with sunspots and faculae
 plt.figure(figsize=(10, 10))
-plt.imshow(blended_map, cmap="inferno", origin="lower")
-plt.colorbar(label="Relative Intensity")
-plt.title("Simulated Solar Surface with Sunspots, Faculae, and Granulation (1080 nm)")
+plt.imshow(temperature_map, cmap="hot", origin="lower")
+plt.colorbar(label="Temperature (K)")
+plt.title("Simulated Solar Surface with Irregular Sunspots and Faculae (Temperature Map)")
 plt.xlabel("X")
 plt.ylabel("Y")
 plt.axis("off")
 plt.show()
 
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.ndimage import gaussian_filter
-
-# Load MHD data (e.g., temperature, density, magnetic field) - placeholder data
-grid_size = 256
-temperature = np.random.rand(grid_size, grid_size) * 5778  # Sun-like temperature
-density = np.random.rand(grid_size, grid_size) * 1e17  # Approximate photospheric density
-magnetic_field_strength = np.random.rand(grid_size, grid_size) * 0.1  # Magnetic field in Tesla
-
-# Smooth the data to simulate the effect of turbulence/granulation
-temperature_smoothed = gaussian_filter(temperature, sigma=3)
-density_smoothed = gaussian_filter(density, sigma=3)
-magnetic_field_smoothed = gaussian_filter(magnetic_field_strength, sigma=3)
-
-# Visualize the temperature as an example
-plt.figure(figsize=(8, 8))
-plt.imshow(temperature_smoothed, cmap="plasma", origin="lower")
-plt.colorbar(label="Temperature (K)")
-plt.title("Simulated Star Surface Temperature")
+# Plot the magnetic field strength
+plt.figure(figsize=(10, 10))
+plt.imshow(magnetic_field_smoothed, cmap="inferno", origin="lower")
+plt.colorbar(label="Magnetic Field Strength (Tesla)")
+plt.title("Simulated Magnetic Field on Solar Surface")
 plt.xlabel("X")
 plt.ylabel("Y")
-plt.show()
-import numpy as np
-import matplotlib.pyplot as plt
+plt.axis("off")
+# plt.show()
 
-# Constants
-h = 6.626e-34  # Planck's constant (J s)
-c = 3.0e8      # Speed of light (m/s)
-k = 1.38e-23   # Boltzmann constant (J/K)
-wavelength = 1080e-9  # 1080 nm in meters
 
-# Temperatures
-T_photosphere = 5770  # Temperature of the photosphere in K
-T_penumbra = 4500     # Temperature of penumbra in K
-T_umbra = 4000        # Temperature of umbra in K
-T_faculae = 5900      # Temperature of faculae in K
 
-# Limb darkening parameters for 1080 nm (approximate)
-limb_darkening_coeff = 0.5
 
-def planck_law(T, wavelength):
-    """Calculate intensity based on Planck's law for a given temperature and wavelength."""
-    return (2 * h * c**2 / wavelength**5) / (np.exp(h * c / (wavelength * k * T)) - 1)
 
-def limb_darkening(x, y, coeff=limb_darkening_coeff):
-    """Calculate limb darkening based on distance from the solar center."""
-    r = np.sqrt(x**2 + y**2)
-    return 1 - coeff * (1 - np.sqrt(1 - r**2))
-
-# Grid setup
-size = 500  # Grid size
-sun_radius = 1  # Normalized radius for the sun's disk
-x = np.linspace(-1, 1, size)
-y = np.linspace(-1, 1, size)
-X, Y = np.meshgrid(x, y)
-R = np.sqrt(X**2 + Y**2)
-
-# Generate the solar surface with limb darkening
-solar_surface = np.zeros((size, size))
-for i in range(size):
-    for j in range(size):
-        if R[i, j] <= sun_radius:  # Within the solar disk
-            intensity_photosphere = planck_law(T_photosphere, wavelength) * limb_darkening(X[i, j], Y[i, j])
-            solar_surface[i, j] = intensity_photosphere
-
-# Add sunspots with umbra and penumbra
-num_sunspots = 10  # Increase the number of sunspots for clusters
-umbra_radius = 0.02  # Relative size of the umbra
-penumbra_radius = 0.05  # Relative size of the penumbra
-
-for _ in range(num_sunspots):
-    # Random position for the sunspot within the equatorial region
-    cx, cy = np.random.uniform(-0.6, 0.6), np.random.uniform(-0.3, 0.3)
-    
-    for i in range(size):
-        for j in range(size):
-            distance = np.sqrt((X[i, j] - cx)**2 + (Y[i, j] - cy)**2)
-            
-            if distance < umbra_radius:
-                # Umbra region
-                intensity_umbra = planck_law(T_umbra, wavelength) * limb_darkening(X[i, j], Y[i, j])
-                solar_surface[i, j] = intensity_umbra
-            elif distance < penumbra_radius:
-                # Penumbra region
-                intensity_penumbra = planck_law(T_penumbra, wavelength) * limb_darkening(X[i, j], Y[i, j])
-                solar_surface[i, j] = intensity_penumbra
-
-# Add groups of faculae near the equatorial bands
-faculae_radius = 0.07  # Relative size for faculae regions
-num_faculae_groups = 15  # Number of faculae groups
-
-for _ in range(num_faculae_groups):
-    # Position faculae groups in bands around the equator
-    cx, cy = np.random.uniform(-0.8, 0.8), np.random.uniform(-0.4, 0.4)
-    
-    for i in range(size):
-        for j in range(size):
-            distance = np.sqrt((X[i, j] - cx)**2 + (Y[i, j] - cy)**2)
-            
-            if distance < faculae_radius:
-                # Faculae region
-                limb_effect = 1 + 0.3 * (1 - np.sqrt(1 - R[i, j]**2))  # Enhance brightness near limb
-                intensity_faculae = planck_law(T_faculae, wavelength) * limb_darkening(X[i, j], Y[i, j]) * limb_effect
-                solar_surface[i, j] = intensity_faculae
-
-# Plot the simulated solar surface with sunspots and faculae groups
-plt.imshow(solar_surface, cmap='hot', origin='lower', extent=[-1, 1, -1, 1])
-plt.colorbar(label="Intensity at 1080 nm")
-plt.title("Simulated Solar Surface with Sunspots and Faculae at 1080 nm")
-plt.xlabel("X (solar radii)")
-plt.ylabel("Y (solar radii)")
-plt.show()
