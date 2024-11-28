@@ -1,0 +1,453 @@
+import numpy as np
+from astropy.io import fits
+import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
+from scipy.ndimage import gaussian_filter
+import pandas as pd
+from scipy import special
+
+# Path to the file
+file_path = '/Users/stephi/Desktop/master_oot_spectrum.dat'
+
+# Read the data into a pandas DataFrame
+data = pd.read_csv(
+   file_path,
+   delim_whitespace=True,
+   comment='#',
+   names=["Wavelength_stellar_frame (nm)", "Normalised flux", "Error"]
+)
+
+# Plot the data
+plt.figure(figsize=(10, 6))
+plt.errorbar(
+   data["Wavelength_stellar_frame (nm)"],
+   data["Normalised flux"],
+   yerr=data["Error"],
+   fmt='o',  # Point markers
+   ecolor='gray',  # Error bar color
+   elinewidth=1,  # Error bar width
+   capsize=2,  # Error bar caps
+   label='Data with Errors'
+)
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Normalised Flux")
+plt.title("Spectrum with Error Bars")
+plt.legend()
+plt.grid()
+plt.show()
+
+
+
+# Path to the file
+file_path = '/Users/stephi/Desktop/master_oot_spectrum.dat'
+
+# Read the data into a pandas DataFrame
+data = pd.read_csv(
+   file_path,
+   delim_whitespace=True,
+   comment='#',
+   names=["Wavelength_stellar_frame (nm)", "Normalised flux", "Error"]
+)
+
+# Plot the data
+plt.figure(figsize=(10, 6))
+plt.errorbar(
+   data["Wavelength_stellar_frame (nm)"],
+   data["Normalised flux"],
+   yerr=data["Error"],
+   fmt='o',  # Point markers
+   ecolor='gray',  # Error bar color
+   elinewidth=1,  # Error bar width
+   capsize=2,  # Error bar caps
+   label='Data with Errors'
+)
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Normalised Flux")
+plt.xlim(1082.9, 1083.15)
+plt.title("Spectrum with Error Bars")
+plt.legend()
+plt.grid()
+plt.show()
+
+
+# Define the inverted Voigt profile with two Lorentzians
+def combined_voigt(x, baseline, amp, center, sigma, gamma1, gamma2):
+   """Inverted Voigt profile with two Lorentzian components."""
+   gamma_total = gamma1 + gamma2
+   z = ((x - center) + 1j * gamma_total) / (sigma * np.sqrt(2))
+   return baseline - amp * special.wofz(z).real / (sigma * np.sqrt(2 * np.pi))
+
+# Fitting function
+def fit_voigt(x_data, y_data, y_err, initial_guess):
+   """Fit the inverted Voigt profile to data."""
+   popt, pcov = curve_fit(
+       combined_voigt,
+       x_data,
+       y_data,
+       sigma=y_err,
+       p0=initial_guess,
+       bounds = ([0, 1082.9, 1000, 0.0001, 0.9], [1.0, 1083.15, 10000, 0.1, 1.1]),
+       maxfev=5000,
+   )
+   return popt, pcov
+
+# Load the data
+file_path = '/Users/stephi/Desktop/master_oot_spectrum.dat'
+data = pd.read_csv(
+   file_path,
+   delim_whitespace=True,
+   comment='#',
+   names=["Wavelength_stellar_frame (nm)", "Normalised flux", "Error"]
+)
+
+# Filter for the specified wavelength range
+filtered_data = data[
+   (data["Wavelength_stellar_frame (nm)"] >= 1082.9) &
+   (data["Wavelength_stellar_frame (nm)"] <= 1083.15)
+]
+
+x_data = filtered_data["Wavelength_stellar_frame (nm)"].values
+y_data = filtered_data["Normalised flux"].values
+y_err = filtered_data["Error"].values
+
+
+# Initial guess for parameters: [baseline, amplitude, center, sigma, gamma1, gamma2]
+initial_guess = [1.0, 0.05, 1083.0, 0.001, 0.00001, 0.01]
+
+# Define parameter bounds for fitting (must match the length of initial_guess)
+lower_bounds = [0.0, 0.01, 1082.9, 0.0001, 0.00001, 0.0]  # 6 values
+upper_bounds = [2.0, 1.0, 1083.15, 0.1, 0.1, 0.1]  # 6 values
+bounds = (lower_bounds, upper_bounds)
+
+# Fit the inverted Voigt profile
+try:
+    popt, pcov = curve_fit(
+        combined_voigt,
+        x_data,
+        y_data,
+        sigma=y_err,
+        p0=initial_guess,
+        bounds=bounds,
+        maxfev=5000,
+    )
+    # Extract fitted parameters
+    baseline, amp, center, sigma, gamma1, gamma2 = popt
+
+    # Print fitted parameters
+    print("Fitted parameters:")
+    print(f"Baseline: {baseline:.6f}")
+    print(f"Amplitude (depth): {amp:.6f}")
+    print(f"Center: {center:.6f} nm")
+    print(f"Sigma (Gaussian width): {sigma:.6f} nm")
+    print(f"Gamma1 (Natural width): {gamma1:.6f} nm")
+    print(f"Gamma2 (Pressure width): {gamma2:.6f} nm")
+
+except ValueError as e:
+    print(f"Error during curve fitting: {e}")
+
+
+# Extract fitted parameters
+baseline, amp, center, sigma, gamma1, gamma2 = popt
+print("Fitted parameters:")
+print(f"Baseline: {baseline:.6f}")
+print(f"Amplitude (depth): {amp:.6f}")
+print(f"Center: {center:.6f} nm")
+print(f"Sigma (Gaussian width): {sigma:.6f} nm")
+print(f"Gamma1 (Natural width): {gamma1:.6f} nm")
+print(f"Gamma2 (Pressure width): {gamma2:.6f} nm")
+
+# Generate the fitted profile
+x_fit = np.linspace(x_data.min(), x_data.max(), 1000)
+y_fit = combined_voigt(x_fit, *popt)
+
+# Plot the data and the fitted profile
+plt.figure(figsize=(10, 6))
+plt.errorbar(x_data, y_data, yerr=y_err, fmt='o', label="Data", color='blue', ecolor='gray', capsize=2)
+plt.plot(x_fit, y_fit, label="Fitted Inverted Voigt Profile", color='red', linewidth=2)
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Normalized Flux")
+plt.legend()
+plt.grid()
+plt.show()
+
+
+# Define the Doppler-broadened Gaussian function
+def doppler_lineshape(omega, amp, center, sigma_v, baseline):
+   """
+   Doppler-broadened lineshape as a Gaussian profile.
+   """
+   c = 3e8  # Speed of light in m/s
+   sigma_omega = center * sigma_v / c  # Doppler broadening in wavelength space
+   return baseline - amp * np.exp(-((omega - center)**2) / (2 * sigma_omega**2)) / (sigma_omega * np.sqrt(2 * np.pi))
+
+# Path to the file
+file_path = '/Users/stephi/Desktop/master_oot_spectrum.dat'
+
+# Read the data into a pandas DataFrame
+data = pd.read_csv(
+   file_path,
+   delim_whitespace=True,
+   comment='#',
+   names=["Wavelength_stellar_frame (nm)", "Normalised flux", "Error"]
+)
+
+# Filter the data for the specified wavelength range
+filtered_data = data[
+   (data["Wavelength_stellar_frame (nm)"] >= 1082.9) &
+   (data["Wavelength_stellar_frame (nm)"] <= 1083.15)
+]
+
+# Extract x (wavelength), y (flux), and y_err (error)
+x_data = filtered_data["Wavelength_stellar_frame (nm)"].values
+y_data = filtered_data["Normalised flux"].values
+y_err = filtered_data["Error"].values
+
+# Calculated initial guesses
+amp_guess = 0.5  # Approximate depth of the absorption
+center_guess = 1083.0  # Central wavelength of the line
+sigma_v_guess = 5750  # Standard deviation of velocity distribution (m/s)
+baseline_guess = 1.0  # Continuum level
+
+initial_guess = [amp_guess, center_guess, sigma_v_guess, baseline_guess]
+
+# Fit the Doppler lineshape to the data
+popt, pcov = curve_fit(doppler_lineshape, x_data, y_data, p0=initial_guess, sigma=y_err, maxfev=5000)
+
+# Extract fitted parameters
+amp, center, sigma_v, baseline = popt
+print(f"Fitted parameters:")
+print(f"Amplitude (depth): {amp}")
+print(f"Center: {center} nm")
+print(f"Sigma_v (velocity dispersion): {sigma_v} m/s")
+print(f"Baseline: {baseline}")
+
+# Generate the fitted curve
+x_fit = np.linspace(x_data.min(), x_data.max(), 1000)
+y_fit = doppler_lineshape(x_fit, *popt)
+
+# Plot the data and the fitted curve
+plt.figure(figsize=(10, 6))
+plt.errorbar(x_data, y_data, yerr=y_err, fmt='o', label="Data", color='blue', ecolor='gray', capsize=2)
+plt.plot(x_fit, y_fit, label="Fitted Doppler Lineshape", color='red', linewidth=2)
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Normalized Flux")
+plt.title("Doppler-Broadened Lineshape Fit")
+plt.legend()
+plt.grid()
+plt.show()
+
+
+from scipy.signal import fftconvolve
+
+
+# Direct convolution of Gaussian and Lorentzian profiles
+def gaussian(vx, sigma_v):
+   """
+   Gaussian profile based on Maxwell-Boltzmann distribution.
+   """
+   return np.exp(-vx**2 / (2 * sigma_v**2)) / (sigma_v * np.sqrt(2 * np.pi))
+
+def lorentzian(omega, center, gamma):
+   """
+   Lorentzian profile for collisional broadening.
+   """
+   return gamma / (np.pi * ((omega - center)**2 + gamma**2))
+
+def convolve_gaussian_lorentzian(vx, sigma_v, omega, center, gamma):
+   """
+   Direct convolution of Gaussian and Lorentzian profiles.
+   """
+   # Compute the Gaussian and Lorentzian profiles
+   gaussian_profile = gaussian(vx, sigma_v)
+   lorentzian_profile = lorentzian(omega, center, gamma)
+   
+   # Perform the convolution
+   convolved_profile = fftconvolve(gaussian_profile, lorentzian_profile, mode='same')
+   
+   # Normalize the convolution
+   convolved_profile /= np.trapz(convolved_profile, vx)
+   
+   return convolved_profile
+
+# Define a wrapper function for the convolution to match the curve_fit API
+def convolve_fit_wrapper(x, amp, center, sigma_v, gamma, baseline):
+   """
+   Wrapper for convolving Gaussian and Lorentzian profiles to fit data.
+   """
+   # Define the velocity or frequency range around the data
+   velocity_range = np.linspace(-5, 5, len(x))
+   # Perform the convolution
+   convolved_profile = convolve_gaussian_lorentzian(velocity_range, sigma_v, x, center, gamma)
+   # Scale and shift the profile for fitting
+   return baseline - amp * convolved_profile
+
+# Initial guesses for the parameters
+initial_guess = [0.436406852364046, 1083.015,  -4, 0.1477823012299511, 1.0]  # [amp, center, sigma_v, gamma, baseline]
+
+# Fit the convolution function to the data
+popt, pcov = curve_fit(convolve_fit_wrapper, x_data, y_data, p0=initial_guess, sigma=y_err, maxfev=10000)
+
+# Extract fitted parameters
+amp, center, sigma_v, gamma, baseline = popt
+print("Fitted parameters:")
+print(f"Amplitude (depth): {amp}")
+print(f"Center: {center} nm")
+print(f"Sigma_v (Gaussian width): {sigma_v}")
+print(f"Gamma (Lorentzian width): {gamma}")
+print(f"Baseline: {baseline}")
+
+# Generate the fitted curve
+x_fit = np.linspace(x_data.min(), x_data.max(), 1000)
+y_fit = convolve_fit_wrapper(x_fit, *popt)
+
+# Plot the data and the fitted profile
+plt.figure(figsize=(10, 6))
+plt.errorbar(x_data, y_data, yerr=y_err, fmt='o', label="Data", color='blue', ecolor='gray', capsize=2)
+plt.plot(x_fit, y_fit, label="Fitted Convolved Profile", color='red', linewidth=2)
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Normalized Flux")
+plt.title("Convolved Profile Fit (Gaussian + Lorentzian)")
+plt.legend()
+plt.grid()
+plt.show()
+
+# Define a for loop to systematically try a range of initial guesses
+# This will iterate over combinations of amplitude, center, sigma_v, gamma, and baseline to find the best initial guess.
+
+from itertools import product
+
+# Define parameter ranges for the initial guesses
+amp_range = np.linspace(0.1, 0.5, 5)  # Amplitude range
+center_range = np.linspace(1082.97, 1083.02, 5)  # Center range
+sigma_v_range = np.linspace(5, 20, 5)  # Gaussian width range
+gamma_range = np.linspace(0.05, 0.2, 5)  # Lorentzian width range
+baseline_range = np.linspace(0.9, 1.0, 5)  # Baseline range
+
+# Initialize variables to store the best fit results
+best_popt = None
+best_pcov = None
+lowest_residual = np.inf
+
+# Loop over all combinations of initial guesses
+for amp, center, sigma_v, gamma, baseline in product(amp_range, center_range, sigma_v_range, gamma_range, baseline_range):
+   try:
+       # Current initial guess
+       initial_guess = [amp, center, sigma_v, gamma, baseline]
+
+       # Perform the fit
+       popt, pcov = curve_fit(convolve_fit_wrapper, x_data, y_data, p0=initial_guess, sigma=y_err, maxfev=5000)
+
+       # Calculate the residuals
+       residuals = np.sum((y_data - convolve_fit_wrapper(x_data, *popt))**2)
+
+       # Update the best fit if the residuals are lower
+       if residuals < lowest_residual:
+           lowest_residual = residuals
+           best_popt = popt
+           best_pcov = pcov
+
+   except RuntimeError:
+       # Ignore fits that fail to converge
+       continue
+
+# Print the best initial guess and corresponding parameters
+print("Best Initial Guess Found:")
+print(f"Amplitude: {best_popt[0]}")
+print(f"Center: {best_popt[1]}")
+print(f"Sigma_v: {best_popt[2]}")
+print(f"Gamma: {best_popt[3]}")
+print(f"Baseline: {best_popt[4]}")
+
+# Plot the best fit
+x_fit = np.linspace(x_data.min(), x_data.max(), 1000)
+y_fit = convolve_fit_wrapper(x_fit, *best_popt)
+
+plt.figure(figsize=(10, 6))
+plt.errorbar(x_data, y_data, yerr=y_err, fmt='o', label="Data", color='blue', ecolor='gray', capsize=2)
+plt.plot(x_fit, y_fit, label="Best Fitted Convolved Profile", color='red', linewidth=2)
+plt.xlabel("Wavelength (nm)")
+plt.ylabel("Normalized Flux")
+plt.title("Best Fit (Gaussian + Lorentzian Convolution)")
+plt.legend()
+plt.grid()
+plt.show()
+
+from scipy.signal import fftconvolve
+
+# Direct convolution of Gaussian and Lorentzian profiles
+def gaussian(vx, sigma_v):
+    return np.exp(-vx**2 / (2 * sigma_v**2)) / (sigma_v * np.sqrt(2 * np.pi))
+
+def lorentzian(omega, center, gamma):
+    return gamma / (np.pi * ((omega - center)**2 + gamma**2))
+
+def convolve_gaussian_lorentzian(vx, sigma_v, omega, center, gamma):
+    gaussian_profile = gaussian(vx, sigma_v)
+    lorentzian_profile = lorentzian(omega, center, gamma)
+    convolved_profile = fftconvolve(gaussian_profile, lorentzian_profile, mode='same')
+    
+    # Normalize the convolution
+    normalization = np.trapz(convolved_profile, vx)
+    if normalization > 1e-10:
+        convolved_profile /= normalization
+    else:
+        convolved_profile = np.zeros_like(convolved_profile)
+    
+    return convolved_profile
+
+def convolve_fit_wrapper(x, amp, center, sigma_v, gamma, baseline):
+    velocity_range = np.linspace(-5, 5, len(x))
+    convolved_profile = convolve_gaussian_lorentzian(velocity_range, sigma_v, x, center, gamma)
+    return baseline - amp * convolved_profile
+
+# Define parameter ranges for the initial guesses
+amp_range = np.linspace(0.1, 0.5, 5)
+center_range = np.linspace(1082.92, 1083.1, 5)
+sigma_v_range = np.linspace(0.0005, 0.005, 5)
+gamma_range = np.linspace(0.005, 0.02, 5)
+baseline_range = np.linspace(0.9, 10, 5)
+
+# Initialize variables to store the best fit results
+best_popt = None
+best_pcov = None
+lowest_residual = np.inf
+
+# Loop over all combinations of initial guesses
+for amp, center, sigma_v, gamma, baseline in product(amp_range, center_range, sigma_v_range, gamma_range, baseline_range):
+    try:
+        initial_guess = [amp, center, sigma_v, gamma, baseline]
+        popt, pcov = curve_fit(convolve_fit_wrapper, x_data, y_data, p0=initial_guess, sigma=y_err, maxfev=5000)
+        residuals = np.sum((y_data - convolve_fit_wrapper(x_data, *popt))**2)
+
+        if residuals < lowest_residual:
+            lowest_residual = residuals
+            best_popt = popt
+            best_pcov = pcov
+
+    except RuntimeError:
+        continue
+
+# Check if a valid fit was found
+if best_popt is not None:
+    print("Best Initial Guess Found:")
+    print(f"Amplitude: {best_popt[0]}")
+    print(f"Center: {best_popt[1]}")
+    print(f"Sigma_v: {best_popt[2]}")
+    print(f"Gamma: {best_popt[3]}")
+    print(f"Baseline: {best_popt[4]}")
+
+    # Plot the best fit
+    x_fit = np.linspace(x_data.min(), x_data.max(), 1000)
+    y_fit = convolve_fit_wrapper(x_fit, *best_popt)
+
+    plt.figure(figsize=(10, 6))
+    plt.errorbar(x_data, y_data, yerr=y_err, fmt='o', label="Data", color='blue', ecolor='gray', capsize=2)
+    plt.plot(x_fit, y_fit, label="Best Fitted Convolved Profile", color='red', linewidth=2)
+    plt.xlabel("Wavelength (nm)")
+    plt.ylabel("Normalized Flux")
+    plt.title("Best Fit (Gaussian + Lorentzian Convolution)")
+    plt.legend()
+    plt.grid()
+    plt.show()
+else:
+    print("No valid fit found with the given initial guesses and bounds.")
