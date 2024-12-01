@@ -12,6 +12,7 @@ units = {
 
 spectrum = tools.make_spectrum_from_file('wasp107b_transmission_spectrum.dat',
                                     units)
+uncertainty = np.loadtxt('wasp107b_transmission_spectrum.dat', skiprows = 1, usecols = [2])
 
 
 def square_filter(wavelength, center, width):
@@ -19,10 +20,24 @@ def square_filter(wavelength, center, width):
                                (wavelength <= center + width / 2), 1, 0)
     return filter_response
 
-def convolve_with_filter(wavelength, spectrum, filter_response):
+# def convolve_with_filter(wavelength, spectrum, filter_response):
+#     assert len(wavelength) == len(filter_response), "Filter and spectrum must have the same length."
+#     convolved_value = np.sum(spectrum * filter_response) / np.sum(filter_response)
+#     return convolved_value
+
+def convolve_with_filter(wavelength, flux, uncertainty, filter_response):
     assert len(wavelength) == len(filter_response), "Filter and spectrum must have the same length."
-    convolved_value = np.sum(spectrum * filter_response) / np.sum(filter_response)
-    return convolved_value
+    
+    # Weighted flux and uncertainty propagation
+    weights = filter_response / np.sum(filter_response)
+    weighted_flux = flux * weights
+    weighted_uncertainty = uncertainty * weights
+
+    # Convolved flux and propagated uncertainty
+    convolved_flux = np.sum(weighted_flux)
+    convolved_uncertainty = np.sqrt(np.sum((weighted_uncertainty)**2))
+    
+    return convolved_flux, convolved_uncertainty
 
 def gaussian_filter(wavelength, mean, sigma): #amplitude = 1
     return np.exp(-((wavelength - mean)**2)/(2 * sigma**2))
@@ -48,10 +63,12 @@ filter_response = square_filter(wavelengths, filter_center, filter_width)
 
 
 # Perform the convolution
-convolved_value = convolve_with_filter(wavelengths, flux, filter_response)
+#convolved_value = convolve_with_filter(wavelengths, flux, filter_response)
+convolved_value, convolved_uncertainty = convolve_with_filter(wavelengths, flux, uncertainty, filter_response)
 
 # Display the results
-print(f"Convolved value: {convolved_value}")
+#print(f"Convolved value: {convolved_value}")
+print(f"Convolved value: {convolved_value:.5f} ± {convolved_uncertainty:.5f}")
 
 # Gaussian filter
 g_filter_response = gaussian_filter(wavelengths, filter_center, filter_width)
@@ -60,12 +77,18 @@ g_filter_response = gaussian_filter(wavelengths, filter_center, filter_width)
 #g_filter_response /= np.sum(g_filter_response)
 
 convolved_flux = np.convolve(flux, g_filter_response, mode='same')
-g_convolved_value = convolve_with_filter(wavelengths, flux, g_filter_response) #Gaussian filter convolution
-print(f"Gaussian convolved value: {g_convolved_value}")
+#g_convolved_value = convolve_with_filter(wavelengths, flux, g_filter_response) #Gaussian filter convolution
+
+g_convolved_value, g_convolved_uncertainty = convolve_with_filter(wavelengths, flux, uncertainty, g_filter_response)
+
+#print(f"Gaussian convolved value: {g_convolved_value}")
+print(f"Convolved value: {g_convolved_value:.5f} ± {g_convolved_uncertainty:.5f}")
+
 # Plot the spectrum and the filter
 plt.figure(figsize=(8, 5))
-plt.plot(wavelengths, flux, label='Transmission Spectrum', color='blue')
+#plt.plot(wavelengths, flux, label='Transmission Spectrum', color='blue')
 plt.plot(wavelengths, filter_response * max(flux), label='Square Filter', color='red', linestyle='--')
+plt.errorbar(wavelengths, flux, yerr = uncertainty, label='Transmission Spectrum', color='blue')
 plt.xlabel("Wavelength (Å)")
 plt.ylabel("Transmission")
 plt.legend()
@@ -74,7 +97,8 @@ plt.show()
 
 # Gaussian filter
 plt.figure(figsize=(10, 6))
-plt.plot(wavelengths, flux, label='Original Transmission Spectrum', color='blue')
+#plt.plot(wavelengths, flux, label='Original Transmission Spectrum', color='blue')
+plt.errorbar(wavelengths, flux, yerr = uncertainty, label='Transmission Spectrum', color='blue')
 plt.plot(wavelengths, g_filter_response * max(flux), label='Gaussian Filter (scaled)', color='red', linestyle='--')
 plt.xlabel("Wavelength (Å)")
 plt.ylabel("Transmission")
