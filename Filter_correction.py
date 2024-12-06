@@ -15,15 +15,32 @@ spectrum = tools.make_spectrum_from_file('wasp107b_transmission_spectrum.dat',
 uncertainty = np.loadtxt('wasp107b_transmission_spectrum.dat', skiprows = 1, usecols = [2])
 
 
-def square_filter(wavelength, center, width):
-    filter_response = np.where((wavelength >= center - width / 2) &
-                               (wavelength <= center + width / 2), 1, 0)
-    return filter_response
+# def square_filter(wavelength, center, width):
+#     filter_response = np.where((wavelength >= center - width / 2) &
+#                                (wavelength <= center + width / 2), 1, 0)
+#     return filter_response
 
 # def convolve_with_filter(wavelength, spectrum, filter_response):
 #     assert len(wavelength) == len(filter_response), "Filter and spectrum must have the same length."
 #     convolved_value = np.sum(spectrum * filter_response) / np.sum(filter_response)
 #     return convolved_value
+
+
+def square_filter(wavelengths, center, width):
+    # Initialize the filter response with zeros
+    filter_response = np.zeros_like(wavelengths)
+    
+    # Define filter range
+    lower_bound = center - width / 2
+    upper_bound = center + width / 2
+    
+    # Set response to 1 within the passband
+    filter_response[(wavelengths >= lower_bound) & (wavelengths <= upper_bound)] = 1
+    
+    # Normalize so the sum of the filter equals 1
+    filter_response /= np.sum(filter_response)
+    
+    return filter_response
 
 def convolve_with_filter(wavelength, flux, uncertainty, filter_response):
     assert len(wavelength) == len(filter_response), "Filter and spectrum must have the same length."
@@ -62,9 +79,11 @@ print("Filter range:", filter_center - filter_width / 2, filter_center + filter_
 filter_response = square_filter(wavelengths, filter_center, filter_width)
 
 
+
 # Perform the convolution
 #convolved_value = convolve_with_filter(wavelengths, flux, filter_response)
 convolved_value, convolved_uncertainty = convolve_with_filter(wavelengths, flux, uncertainty, filter_response)
+convolved_flux = np.convolve(flux, filter_response, mode='same')
 
 # Display the results
 #print(f"Convolved value: {convolved_value}")
@@ -72,14 +91,21 @@ print(f"Convolved value: {convolved_value:.5f} ± {convolved_uncertainty:.5f}")
 
 # Gaussian filter
 g_filter_response = gaussian_filter(wavelengths, filter_center, filter_width)
+g_filter_response /= np.sum(g_filter_response)
+
 
 
 #g_filter_response /= np.sum(g_filter_response)
 
-convolved_flux = np.convolve(flux, g_filter_response, mode='same')
+convolved_flux = np.convolve(flux, filter_response, mode='same')
+#convolved_flux = convolved_flux * (np.max(flux) / np.max(convolved_flux))
+
 #g_convolved_value = convolve_with_filter(wavelengths, flux, g_filter_response) #Gaussian filter convolution
 
 g_convolved_value, g_convolved_uncertainty = convolve_with_filter(wavelengths, flux, uncertainty, g_filter_response)
+g_convolved_flux = np.convolve(flux, g_filter_response, mode='same')
+#g_convolved_flux = g_convolved_flux * (np.max(flux) / np.max(g_convolved_flux))
+
 
 #print(f"Gaussian convolved value: {g_convolved_value}")
 print(f"Convolved value: {g_convolved_value:.5f} ± {g_convolved_uncertainty:.5f}")
@@ -87,8 +113,10 @@ print(f"Convolved value: {g_convolved_value:.5f} ± {g_convolved_uncertainty:.5f
 # Plot the spectrum and the filter
 plt.figure(figsize=(8, 5))
 #plt.plot(wavelengths, flux, label='Transmission Spectrum', color='blue')
-plt.plot(wavelengths, filter_response * max(flux), label='Square Filter', color='red', linestyle='--')
+plt.plot(wavelengths, filter_response * max(flux), label='Normalised Square Filter', color='red', linestyle='--')
 plt.errorbar(wavelengths, flux, yerr = uncertainty, label='Transmission Spectrum', color='blue')
+plt.plot(wavelengths, convolved_flux, label='Convolved Spectrum (Square)', color='green', linestyle=':')
+
 plt.xlabel("Wavelength (Å)")
 plt.ylabel("Transmission")
 plt.legend()
@@ -100,6 +128,8 @@ plt.figure(figsize=(10, 6))
 #plt.plot(wavelengths, flux, label='Original Transmission Spectrum', color='blue')
 plt.errorbar(wavelengths, flux, yerr = uncertainty, label='Transmission Spectrum', color='blue')
 plt.plot(wavelengths, g_filter_response * max(flux), label='Gaussian Filter (scaled)', color='red', linestyle='--')
+plt.plot(wavelengths, g_convolved_flux, label='Convolved Spectrum (Gaussian)', color='green', linestyle=':')
+
 plt.xlabel("Wavelength (Å)")
 plt.ylabel("Transmission")
 plt.title("Spectrum Convolved with Gaussian Filter")
